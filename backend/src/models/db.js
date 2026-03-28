@@ -17,7 +17,6 @@ db.exec(`
     solved        INTEGER NOT NULL DEFAULT 0,
     created_at    TEXT NOT NULL DEFAULT (datetime('now'))
   );
-
   CREATE TABLE IF NOT EXISTS api_keys (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -27,7 +26,6 @@ db.exec(`
     used       INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
-
   CREATE TABLE IF NOT EXISTS tasks (
     id          TEXT PRIMARY KEY,
     api_key_id  INTEGER REFERENCES api_keys(id),
@@ -42,7 +40,6 @@ db.exec(`
     created_at  TEXT NOT NULL DEFAULT (datetime('now')),
     expires_at  TEXT NOT NULL
   );
-
   CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
   CREATE INDEX IF NOT EXISTS idx_api_keys_key ON api_keys(key);
 `);
