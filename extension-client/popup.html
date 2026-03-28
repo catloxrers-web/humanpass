@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<style>
+body{width:280px;font-family:'Segoe UI',Arial,sans-serif;background:#0f1117;color:#94a3b8;margin:0;padding:0}
+.hdr{padding:12px 14px 10px;background:#161b27;border-bottom:1px solid #252d3d;display:flex;align-items:center;justify-content:space-between}
+.logo{font-size:13px;font-weight:700;color:#f1f5f9}.logo span{color:#2563eb}
+.role{font-size:9px;padding:2px 7px;border:1px solid #252d3d;border-radius:4px}
+.body{padding:14px}
+.fl{display:block;font-size:10px;font-weight:500;color:#94a3b8;margin-bottom:4px}
+.fi{width:100%;background:#1c2333;border:1px solid #252d3d;border-radius:5px;color:#f1f5f9;padding:8px 10px;font-size:12px;outline:none;margin-bottom:9px;box-sizing:border-box;font-family:inherit}
+.fi:focus{border-color:#2563eb}
+.fi::placeholder{color:#3d4f68}
+.btn{width:100%;padding:9px;background:#2563eb;border:none;border-radius:5px;color:#fff;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
+.btn:hover{background:#1d4ed8}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.msg{font-size:10px;text-align:center;margin-top:6px;min-height:14px}
+.msg.err{color:#ef4444}.msg.ok{color:#10b981}
+.hint{font-size:10px;color:#3d4f68;margin-top:10px;padding:8px;background:#161b27;border-radius:5px;line-height:1.5}
+.hint b{color:#94a3b8}
+
+/* Main */
+#mainV{display:none}
+.user-row{display:flex;align-items:center;justify-content:space-between;padding:9px;background:#1c2333;border:1px solid #252d3d;border-radius:6px;margin-bottom:12px}
+.uname{font-size:12px;font-weight:600;color:#f1f5f9}
+.btn-sm{font-size:9px;padding:4px 8px;background:transparent;border:1px solid #252d3d;border-radius:4px;color:#94a3b8;cursor:pointer}
+.btn-sm:hover{border-color:#ef4444;color:#ef4444}
+.stat-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.stat{background:#1c2333;border:1px solid #252d3d;border-radius:6px;padding:10px;text-align:center}
+.sv{font-size:20px;font-weight:700;color:#10b981;font-family:'Courier New',monospace}
+.sv.r{color:#ef4444}
+.sl{font-size:9px;color:#94a3b8;margin-top:2px}
+.key-box{background:#1c2333;border:1px solid #252d3d;border-radius:5px;padding:8px 10px;font-size:10px;color:#2563eb;font-family:'Courier New',monospace;word-break:break-all;cursor:pointer;margin-bottom:10px}
+.key-box:hover{border-color:#2563eb}
+.key-lbl{font-size:10px;font-weight:500;color:#94a3b8;margin-bottom:4px}
+.copy-h{font-size:9px;color:#3d4f68;margin-bottom:10px}
+.status-row{display:flex;align-items:center;gap:6px;font-size:10px;margin-bottom:10px;padding:7px 9px;background:#1c2333;border:1px solid #252d3d;border-radius:5px}
+.dot{width:6px;height:6px;border-radius:50%;background:#3d4f68;flex-shrink:0}
+.dot.ok{background:#10b981;box-shadow:0 0 4px #10b981}
+.dot.busy{background:#f59e0b;animation:blink 1s infinite}
+.dot.err{background:#ef4444}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <div class="logo">Human<span>Pass</span></div>
+  <div class="role">Cliente</div>
+</div>
+<div class="body">
+
+  <div id="authV">
+    <label class="fl">Email</label>
+    <input class="fi" id="lE" type="email" placeholder="admin@humanpass.test">
+    <label class="fl">Contraseña</label>
+    <input class="fi" id="lP" type="password" placeholder="••••••••">
+    <button class="btn" id="btnL">Iniciar sesión</button>
+    <div class="msg" id="lMsg"></div>
+    <div class="hint"><b>Prueba:</b><br>admin@humanpass.test<br>admin123</div>
+  </div>
+
+  <div id="mainV">
+    <div class="user-row">
+      <span class="uname" id="uN">—</span>
+      <button class="btn-sm" id="btnO">Salir</button>
+    </div>
+    <div class="status-row">
+      <div class="dot" id="sDot"></div>
+      <span id="sTxt">Inactivo</span>
+    </div>
+    <div class="stat-row">
+      <div class="stat"><div class="sv" id="stS">0</div><div class="sl">Resueltos</div></div>
+      <div class="stat"><div class="sv r" id="stF">0</div><div class="sl">Fallidos</div></div>
+    </div>
+    <div class="key-lbl">API Key (clic para copiar)</div>
+    <div class="key-box" id="keyBox">—</div>
+    <div class="copy-h" id="copyH">Haz clic para copiar</div>
+  </div>
+
+</div>
+<script>
+const API = 'https://TU_SERVIDOR.com'; // ← CAMBIAR
+const $   = id => document.getElementById(id);
+let tok=null, me=null, apiKey=null;
+
+$('btnL').onclick = async () => {
+  const e=$('lE').value.trim(), p=$('lP').value;
+  if (!e||!p) return msg('Completa los campos',true);
+  $('btnL').disabled=true;
+  try {
+    const r=await fetch(`${API}/auth/login`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:e,password:p})});
+    const d=await r.json();
+    if (!r.ok) throw new Error(d.error);
+    if (d.user.role!=='client') throw new Error('Solo para clientes');
+    tok=d.token; me=d.user;
+    chrome.storage.local.set({hp_c_tok:tok,hp_c_me:JSON.stringify(me)});
+    await ensureKey();
+    showMain();
+  } catch(e){msg(e.message,true);}
+  $('btnL').disabled=false;
+};
+
+[$('lE'),$('lP')].forEach(el=>el.onkeydown=e=>{if(e.key==='Enter')$('btnL').click();});
+
+async function ensureKey(){
+  const r=await fetch(`${API}/api/keys`,{headers:{Authorization:`Bearer ${tok}`}});
+  const keys=await r.json();
+  if (Array.isArray(keys)&&keys.length>0){
+    apiKey=keys[0].key;
+  } else {
+    const r2=await fetch(`${API}/api/keys`,{method:'POST',headers:{Authorization:`Bearer ${tok}`,'Content-Type':'application/json'},body:JSON.stringify({label:'Extension'})});
+    const d2=await r2.json();
+    apiKey=d2.key;
+  }
+  chrome.storage.local.set({hp_api_key:apiKey});
+}
+
+$('btnO').onclick = () => {
+  chrome.storage.local.remove(['hp_c_tok','hp_c_me','hp_api_key']);
+  $('mainV').style.display='none';$('authV').style.display='block';
+};
+
+$('keyBox').onclick = () => {
+  if (!apiKey) return;
+  navigator.clipboard.writeText(apiKey).then(()=>{
+    $('copyH').textContent='✓ Copiada';
+    setTimeout(()=>$('copyH').textContent='Haz clic para copiar',2000);
+  });
+};
+
+function showMain(){
+  $('authV').style.display='none';$('mainV').style.display='block';
+  $('uN').textContent=me.name;
+  $('keyBox').textContent=apiKey||'—';
+  refreshStatus();
+}
+
+function refreshStatus(){
+  chrome.storage.local.get(['hp_status','hp_solved','hp_failed'],d=>{
+    const s=d.hp_status||'idle';
+    $('sDot').className=`dot ${s==='active'?'busy':s==='error'?'err':'ok'}`;
+    $('sTxt').textContent=s==='active'?'Resolviendo...':s==='error'?'Error al resolver':'Listo';
+    $('stS').textContent=d.hp_solved||0;
+    $('stF').textContent=d.hp_failed||0;
+  });
+}
+
+function msg(text,err){const el=$('lMsg');el.textContent=text;el.className=`msg ${err?'err':'ok'}`;}
+
+chrome.storage.local.get(['hp_c_tok','hp_c_me','hp_api_key'],async d=>{
+  if(d.hp_c_tok&&d.hp_c_me){
+    tok=d.hp_c_tok;me=JSON.parse(d.hp_c_me);apiKey=d.hp_api_key||null;
+    if(!apiKey) await ensureKey().catch(()=>{});
+    showMain();
+  }
+  refreshStatus();
+});
+</script>
+</body>
+</html>

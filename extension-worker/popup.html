@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<style>
+body{width:280px;font-family:'Segoe UI',Arial,sans-serif;background:#0f1117;color:#94a3b8;margin:0;padding:0}
+.hdr{padding:12px 14px 10px;background:#161b27;border-bottom:1px solid #252d3d;display:flex;align-items:center;justify-content:space-between}
+.logo{font-size:13px;font-weight:700;color:#f1f5f9}.logo span{color:#2563eb}
+.role{font-size:9px;padding:2px 7px;border:1px solid #252d3d;border-radius:4px}
+.body{padding:14px}
+
+/* Auth */
+#authV .fl{display:block;font-size:10px;font-weight:500;color:#94a3b8;margin-bottom:4px}
+#authV .fi{width:100%;background:#1c2333;border:1px solid #252d3d;border-radius:5px;color:#f1f5f9;padding:8px 10px;font-size:12px;outline:none;margin-bottom:9px;box-sizing:border-box;font-family:inherit}
+#authV .fi:focus{border-color:#2563eb}
+#authV .fi::placeholder{color:#3d4f68}
+.btn{width:100%;padding:9px;background:#2563eb;border:none;border-radius:5px;color:#fff;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
+.btn:hover{background:#1d4ed8}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.msg{font-size:10px;color:#ef4444;text-align:center;margin-top:6px;min-height:14px}
+.hint{font-size:10px;color:#3d4f68;margin-top:10px;padding:8px;background:#161b27;border-radius:5px;line-height:1.5}
+.hint b{color:#94a3b8}
+
+/* Main */
+#mainV{display:none}
+.user-row{display:flex;align-items:center;justify-content:space-between;padding:9px;background:#1c2333;border:1px solid #252d3d;border-radius:6px;margin-bottom:12px}
+.uname{font-size:12px;font-weight:600;color:#f1f5f9}
+.btn-sm{font-size:9px;padding:4px 8px;background:transparent;border:1px solid #252d3d;border-radius:4px;color:#94a3b8;cursor:pointer}
+.btn-sm:hover{border-color:#ef4444;color:#ef4444}
+.stat{background:#1c2333;border:1px solid #252d3d;border-radius:6px;padding:12px;text-align:center;margin-bottom:10px}
+.sv{font-size:24px;font-weight:700;color:#10b981;font-family:'Courier New',monospace}
+.sl{font-size:10px;color:#94a3b8;margin-top:2px}
+.open-btn{width:100%;padding:9px;background:transparent;border:1px solid #2563eb;border-radius:5px;color:#2563eb;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit}
+.open-btn:hover{background:rgba(37,99,235,.1)}
+.status{display:flex;align-items:center;gap:6px;font-size:10px;margin-bottom:10px}
+.dot{width:6px;height:6px;border-radius:50%;background:#3d4f68}
+.dot.on{background:#10b981;box-shadow:0 0 4px #10b981}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <div class="logo">Human<span>Pass</span></div>
+  <div class="role">Worker</div>
+</div>
+<div class="body">
+
+  <div id="authV">
+    <label class="fl">Email</label>
+    <input class="fi" id="lE" type="email" placeholder="worker@humanpass.test">
+    <label class="fl">Contraseña</label>
+    <input class="fi" id="lP" type="password" placeholder="••••••••">
+    <button class="btn" id="btnL">Iniciar sesión</button>
+    <div class="msg" id="lMsg"></div>
+    <div class="hint"><b>Prueba:</b><br>worker@humanpass.test<br>worker123</div>
+  </div>
+
+  <div id="mainV">
+    <div class="user-row">
+      <span class="uname" id="uN">—</span>
+      <button class="btn-sm" id="btnO">Salir</button>
+    </div>
+    <div class="status">
+      <div class="dot on"></div>
+      <span>Sesión activa</span>
+    </div>
+    <div class="stat">
+      <div class="sv" id="wS">0</div>
+      <div class="sl">Captchas resueltos</div>
+    </div>
+    <button class="open-btn" id="btnOpen">Abrir Panel de Resolución</button>
+  </div>
+
+</div>
+<script>
+const API = 'https://TU_SERVIDOR.com'; // ← CAMBIAR
+const $   = id => document.getElementById(id);
+let tok=null, me=null;
+
+$('btnL').onclick = async () => {
+  const e=$('lE').value.trim(), p=$('lP').value;
+  if (!e||!p) return ($('lMsg').textContent='Completa los campos');
+  $('btnL').disabled=true;
+  try {
+    const r=await fetch(`${API}/auth/login`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:e,password:p})});
+    const d=await r.json();
+    if (!r.ok) throw new Error(d.error);
+    if (d.user.role!=='worker') throw new Error('Solo para workers');
+    tok=d.token; me=d.user;
+    chrome.storage.local.set({hp_w_tok:tok,hp_w_me:JSON.stringify(me)});
+    showMain();
+  } catch(e){$('lMsg').textContent=e.message;}
+  $('btnL').disabled=false;
+};
+
+[$('lE'),$('lP')].forEach(el=>el.onkeydown=e=>{if(e.key==='Enter')$('btnL').click();});
+
+$('btnO').onclick = () => {
+  chrome.storage.local.remove(['hp_w_tok','hp_w_me']);
+  $('mainV').style.display='none';$('authV').style.display='block';
+};
+
+$('btnOpen').onclick = () => chrome.tabs.create({url: API});
+
+function showMain(){
+  $('authV').style.display='none';$('mainV').style.display='block';
+  $('uN').textContent=me.name;$('wS').textContent=me.solved||0;
+}
+
+chrome.storage.local.get(['hp_w_tok','hp_w_me'],d=>{
+  if(d.hp_w_tok&&d.hp_w_me){tok=d.hp_w_tok;me=JSON.parse(d.hp_w_me);showMain();}
+});
+</script>
+</body>
+</html>

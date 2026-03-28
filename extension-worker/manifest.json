@@ -1,0 +1,17 @@
+{
+  "manifest_version": 2,
+  "name": "HumanPass Worker",
+  "version": "1.0.0",
+  "description": "Abre el panel de resolución de captchas.",
+  "permissions": ["storage", "tabs"],
+  "background": {
+    "scripts": ["background.js"],
+    "persistent": false
+  },
+  "browser_action": {
+    "default_popup": "popup.html",
+    "default_icon": { "48": "icons/icon48.png" },
+    "default_title": "HumanPass Worker"
+  },
+  "icons": { "48": "icons/icon48.png", "128": "icons/icon128.png" }
+}

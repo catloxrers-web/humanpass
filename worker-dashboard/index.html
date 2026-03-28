@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HumanPass — Worker</title>
+<script src="https://js.hcaptcha.com/1/api.js?render=explicit&hl=es" async defer></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0f1117;--s1:#161b27;--s2:#1c2333;--bd:#252d3d;--blue:#2563eb;--blue2:#1d4ed8;--green:#10b981;--amber:#f59e0b;--red:#ef4444;--text:#94a3b8;--white:#f1f5f9;--mono:'JetBrains Mono',monospace;--sans:'Inter',sans-serif}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px}
+
+/* AUTH */
+#auth{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center}
+.auth-card{background:var(--s1);border:1px solid var(--bd);border-radius:12px;padding:36px;width:100%;max-width:380px}
+.auth-logo{font-size:22px;font-weight:700;color:var(--white);margin-bottom:4px}
+.auth-logo span{color:var(--blue)}
+.auth-sub{font-size:12px;color:var(--text);margin-bottom:28px}
+.fg{margin-bottom:14px}
+.fl{display:block;font-size:11px;font-weight:500;color:var(--text);margin-bottom:5px}
+.fi{width:100%;background:var(--s2);border:1px solid var(--bd);border-radius:6px;color:var(--white);padding:10px 12px;font-family:var(--sans);font-size:13px;outline:none;transition:border .15s}
+.fi:focus{border-color:var(--blue)}
+.fi::placeholder{color:#3d4f68}
+.btn-login{width:100%;padding:11px;background:var(--blue);border:none;border-radius:6px;color:#fff;font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;transition:background .15s;margin-top:4px}
+.btn-login:hover{background:var(--blue2)}
+.btn-login:disabled{opacity:.4;cursor:not-allowed}
+.auth-msg{margin-top:10px;font-size:11px;text-align:center;min-height:16px;color:var(--red)}
+.auth-hint{margin-top:16px;padding:12px;background:var(--s2);border-radius:6px;font-size:11px;color:var(--text);line-height:1.6}
+.auth-hint strong{color:var(--white)}
+
+/* APP */
+#app{display:none;min-height:100vh}
+.topbar{background:var(--s1);border-bottom:1px solid var(--bd);height:52px;padding:0 20px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:10}
+.logo{font-size:15px;font-weight:700;color:var(--white)}.logo span{color:var(--blue)}
+.sep{flex:1}
+.tb-solved{display:flex;flex-direction:column;align-items:flex-end}
+.tb-sv{font-family:var(--mono);font-size:15px;font-weight:600;color:var(--green);line-height:1}
+.tb-sl{font-size:10px;color:var(--text)}
+.wdot{width:8px;height:8px;border-radius:50%;background:#3d4f68;transition:all .3s;flex-shrink:0}
+.wdot.on{background:var(--green);box-shadow:0 0 6px var(--green);animation:blink 2s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+.tb-name{font-size:13px;color:var(--white);font-weight:500}
+.btn-out{font-size:11px;padding:5px 10px;background:transparent;border:1px solid var(--bd);border-radius:5px;color:var(--text);cursor:pointer;font-family:var(--sans)}
+.btn-out:hover{border-color:var(--red);color:var(--red)}
+
+.layout{display:grid;grid-template-columns:200px 1fr;min-height:calc(100vh - 52px)}
+.sidebar{background:var(--s1);border-right:1px solid var(--bd);padding:16px 0}
+.ni{display:flex;align-items:center;gap:10px;padding:9px 16px;cursor:pointer;font-size:13px;font-weight:500;color:var(--text);border-left:2px solid transparent;transition:all .12s}
+.ni:hover{background:var(--s2);color:var(--white)}
+.ni.on{background:var(--s2);color:var(--blue);border-left-color:var(--blue)}
+.ni svg{width:16px;height:16px;flex-shrink:0}
+.sb-stats{margin:16px 12px 0;padding:14px;background:var(--s2);border:1px solid var(--bd);border-radius:8px}
+.ss-l{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text);margin-bottom:4px}
+.ss-v{font-family:var(--mono);font-size:22px;font-weight:600;color:var(--green)}
+
+.page{display:none;padding:24px 28px}.page.on{display:block}
+.ph{font-size:18px;font-weight:700;color:var(--white);margin-bottom:3px}
+.ps{font-size:12px;color:var(--text);margin-bottom:20px}
+
+/* Task card */
+.task-card{background:var(--s1);border:1px solid var(--bd);border-radius:10px;padding:20px;border-left:3px solid var(--amber)}
+.tc-hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;gap:10px}
+.tc-url{font-size:13px;font-weight:600;color:var(--white);word-break:break-all;margin-bottom:3px}
+.tc-sk{font-family:var(--mono);font-size:10px;color:#4a7cc0}
+.badge{font-size:10px;font-weight:600;padding:3px 9px;border-radius:5px;white-space:nowrap;background:rgba(245,158,11,.1);color:var(--amber);border:1px solid rgba(245,158,11,.3)}
+.badge.send{background:rgba(16,185,129,.1);color:var(--green);border-color:rgba(16,185,129,.3)}
+#captchaWrap{min-height:80px;margin:14px 0}
+.btn-skip{font-size:11px;font-weight:600;padding:7px 14px;background:transparent;border:1px solid var(--bd);border-radius:5px;color:var(--text);cursor:pointer;font-family:var(--sans);transition:all .12s}
+.btn-skip:hover{border-color:var(--red);color:var(--red)}
+
+/* Idle */
+.idle{text-align:center;padding:60px 20px}
+.idle-ico{font-size:40px;opacity:.07;display:block;margin-bottom:12px}
+.idle-t{font-size:15px;font-weight:600;color:var(--white);margin-bottom:6px}
+.idle-s{font-size:12px;color:var(--text)}
+.loader{width:48px;height:3px;background:var(--bd);border-radius:2px;margin:18px auto 0;overflow:hidden}
+.loader::after{content:'';display:block;width:35%;height:100%;background:var(--blue);border-radius:2px;animation:load 1.4s linear infinite}
+@keyframes load{from{transform:translateX(-100%)}to{transform:translateX(400%)}}
+
+/* Stats page */
+.sg{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px}
+.sc{background:var(--s1);border:1px solid var(--bd);border-radius:8px;padding:16px}
+.sl{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text);margin-bottom:6px}
+.sv{font-family:var(--mono);font-size:26px;font-weight:600;color:var(--white)}
+.sv.g{color:var(--green)}.sv.b{color:var(--blue)}
+
+/* Toast */
+#toast{position:fixed;bottom:22px;right:22px;z-index:999;padding:10px 18px;font-size:11px;font-weight:600;border-radius:7px;background:var(--green);color:#fff;opacity:0;transform:translateY(6px);transition:all .2s;pointer-events:none}
+#toast.on{opacity:1;transform:translateY(0)}
+#toast.err{background:var(--red)}
+
+@media(max-width:680px){.layout{grid-template-columns:1fr}.sidebar{display:none}}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="auth">
+  <div class="auth-card">
+    <div class="auth-logo">Human<span>Pass</span></div>
+    <div class="auth-sub">Panel de resolución — Workers</div>
+    <div class="fg"><label class="fl">Email</label><input class="fi" id="lEmail" type="email" placeholder="worker@humanpass.test" autocomplete="email"></div>
+    <div class="fg"><label class="fl">Contraseña</label><input class="fi" id="lPass" type="password" placeholder="••••••••" autocomplete="current-password"></div>
+    <button class="btn-login" id="btnLogin">Iniciar sesión</button>
+    <div class="auth-msg" id="lMsg"></div>
+    <div class="auth-hint">
+      <strong>Credenciales de prueba:</strong><br>
+      Worker: worker@humanpass.test / worker123
+    </div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <div class="topbar">
+    <div class="logo">Human<span>Pass</span></div>
+    <div class="sep"></div>
+    <div class="tb-solved"><div class="tb-sv" id="tbSolved">0</div><div class="tb-sl">Resueltos</div></div>
+    <div class="wdot" id="wdot"></div>
+    <span class="tb-name" id="tbName"></span>
+    <button class="btn-out" id="btnOut">Salir</button>
+  </div>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sb-stats">
+        <div class="ss-l">Total resueltos</div>
+        <div class="ss-v" id="sbSolved">0</div>
+      </div>
+      <div style="margin-top:12px">
+        <div class="ni on" data-p="work">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          Resolver captchas
+        </div>
+        <div class="ni" data-p="stats">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+          Estadísticas
+        </div>
+      </div>
+    </aside>
+
+    <!-- WORK -->
+    <div class="page on" id="p-work">
+      <div class="ph">Resolver captchas</div>
+      <div class="ps">Los captchas llegan automáticamente vía WebSocket.</div>
+      <div id="taskWrap" style="display:none">
+        <div class="task-card">
+          <div class="tc-hdr">
+            <div style="flex:1;min-width:0">
+              <div class="tc-url" id="tUrl"></div>
+              <div class="tc-sk" id="tSk"></div>
+            </div>
+            <div class="badge" id="tBadge">Resolviendo</div>
+          </div>
+          <div id="captchaWrap"></div>
+          <button class="btn-skip" id="btnSkip">↩ Saltar</button>
+        </div>
+      </div>
+      <div id="idleWrap">
+        <div class="idle">
+          <span class="idle-ico">◎</span>
+          <div class="idle-t">Esperando captchas...</div>
+          <div class="idle-s" id="idleMsg">Conectando al servidor</div>
+          <div class="loader"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STATS -->
+    <div class="page" id="p-stats">
+      <div class="ph">Estadísticas</div>
+      <div class="ps">Resumen de tu sesión</div>
+      <div class="sg">
+        <div class="sc"><div class="sl">Total resueltos</div><div class="sv g" id="stTotal">0</div></div>
+        <div class="sc"><div class="sl">Workers online</div><div class="sv b" id="stWorkers">0</div></div>
+        <div class="sc"><div class="sl">Cola pendiente</div><div class="sv" id="stQueue">0</div></div>
+        <div class="sc"><div class="sl">Resueltos hoy</div><div class="sv g" id="stToday">0</div></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div id="toast"></div>
+<script src="worker.js"></script>
+</body>
+</html>
