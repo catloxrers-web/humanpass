@@ -1,6 +1,6 @@
 // extension-client/background.js
 'use strict';
-const API = 'https://TU_SERVIDOR.com'; // ← CAMBIAR
+const API = 'https://humanpass-production.up.railway.app'; // ← CAMBIAR
 
 const active = new Map();
 
