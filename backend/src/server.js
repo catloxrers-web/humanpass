@@ -59,7 +59,7 @@ wss.on('connection', ws => {
     switch (msg.type) {
       case 'AUTH': {
         try {
-          const p = jwt.verify(msg.token, process.env.JWT_SECRET || 'xK9mP2qR7nL4vB8wE1jA5cF6hY3tN0sZ');
+          const p = jwt.verify(msg.token, process.env.JWT_SECRET || 'humanpass_secret_cambia_esto_en_produccion');
           if (p.role !== 'worker') throw new Error('Not a worker');
           const u = db.prepare(`SELECT * FROM users WHERE id=? AND active=1`).get(p.userId);
           if (!u || u.role !== 'worker') throw new Error('User not found');
