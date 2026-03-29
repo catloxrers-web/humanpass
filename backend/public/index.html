@@ -95,19 +95,12 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 </head>
 <body>
 
-<!-- LOGIN -->
-<div id="auth">
-  <div class="auth-card">
-    <div class="auth-logo">Human<span>Pass</span></div>
-    <div class="auth-sub">Panel de resolución — Workers</div>
-    <div class="fg"><label class="fl">Email</label><input class="fi" id="lEmail" type="email" placeholder="worker@humanpass.test" autocomplete="email"></div>
-    <div class="fg"><label class="fl">Contraseña</label><input class="fi" id="lPass" type="password" placeholder="••••••••" autocomplete="current-password"></div>
-    <button class="btn-login" id="btnLogin">Iniciar sesión</button>
-    <div class="auth-msg" id="lMsg"></div>
-    <div class="auth-hint">
-      <strong>Credenciales de prueba:</strong><br>
-      Worker: worker@humanpass.test / worker123
-    </div>
+<!-- CONECTANDO -->
+<div id="auth" style="position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:var(--bg)">
+  <div style="text-align:center">
+    <div style="font-size:22px;font-weight:700;color:var(--white);margin-bottom:8px">Human<span style="color:var(--blue)">Pass</span></div>
+    <div id="lMsg" style="font-size:13px;color:var(--text)">Conectando...</div>
+    <div style="width:48px;height:3px;background:var(--bd);border-radius:2px;margin:16px auto 0;overflow:hidden"><div style="width:35%;height:100%;background:var(--blue);border-radius:2px;animation:load 1.4s linear infinite"></div></div>
   </div>
 </div>
 
