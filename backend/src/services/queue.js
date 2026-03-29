@@ -106,8 +106,8 @@ function getStats() {
     workers_online: workers.size,
     workers_idle:   [...workers.values()].filter(w => w.status === 'idle').length,
     workers_busy:   [...workers.values()].filter(w => w.status === 'busy').length,
-    queue_pending:  db.prepare(`SELECT COUNT(*) as c FROM tasks WHERE status='pending'`).get().c,
-    solved_today:   db.prepare(`SELECT COUNT(*) as c FROM tasks WHERE status='solved' AND date(solved_at)=date('now')`).get().c
+    queue_pending:  (db.prepare(`SELECT COUNT(*) as c FROM tasks WHERE status='pending'`).get() || {c:0}).c,
+    solved_today:   (db.prepare(`SELECT COUNT(*) as c FROM tasks WHERE status='solved' AND date(solved_at)=date('now')`).get() || {c:0}).c
   };
 }
 
