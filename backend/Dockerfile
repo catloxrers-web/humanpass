@@ -1,14 +1,7 @@
-FROM node:20-bullseye-slim
-
-RUN apt-get update && apt-get install -y \
-    python3 \
-    make \
-    g++ \
-    && rm -rf /var/lib/apt/lists/*
-
+FROM node:20-slim
 WORKDIR /app
 COPY package*.json ./
-RUN npm install --build-from-source
+RUN npm install
 COPY . .
 RUN node src/seed.js
 EXPOSE 8080
