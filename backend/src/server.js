@@ -1,66 +1,31 @@
-// ── WebSocket: workers ────────────────────────────────────────────
-wss.on('connection', (ws) => {
-  let wid = null;
-  console.log('[WS] ✅ Nueva conexión WebSocket entrante');
+// src/server.js - VERSIÓN MÍNIMA PARA QUE LEVANTE
+require('dotenv').config();
+const express = require('express');
+const http = require('http');
+const path = require('path');
 
-  // Enviar PONG inmediato para confirmar que el servidor está vivo
-  ws.send(JSON.stringify({ type: 'PONG', message: 'Server alive' }));
+const app = express();
+const server = http.createServer(app);
 
-  ws.on('message', (raw) => {
-    let msg;
-    try {
-      msg = JSON.parse(raw.toString());
-      console.log(`[WS] 📨 Mensaje recibido → type: ${msg.type}`);
-    } catch (e) {
-      console.error('[WS] ❌ JSON inválido:', e.message);
-      return;
-    }
+const PORT = process.env.PORT || 3000;
 
-    if (msg.type === 'AUTH') {
-      console.log('[WS] Procesando AUTH...');
-      try {
-        const jwt = require('jsonwebtoken');
-        const secret = process.env.JWT_SECRET || 'humanpass_secret_cambia_esto_en_produccion';
-        const payload = jwt.verify(msg.token, secret);
-        console.log(`[WS] JWT verificado → userId: ${payload.userId}, role: ${payload.role}`);
+app.use(require('cors')({ origin: '*' }));
+app.use(express.json());
+app.use(express.static(path.join(__dirname, '../public')));
 
-        if (payload.role !== 'worker') {
-          throw new Error('Usuario no es worker');
-        }
+app.use('/auth', require('./routes/auth'));
 
-        const user = db.prepare('SELECT * FROM users WHERE id=? AND active=1').get(payload.userId);
-        if (!user) throw new Error('Worker no encontrado o inactivo');
+// Ruta API muy básica (para evitar crash si api.js tiene problemas)
+app.use('/api', (req, res) => {
+  res.json({ message: 'API temporal - worker no disponible aún' });
+});
 
-        wid = user.id;
-        queue.registerWorker(wid, ws);
+app.get('/health', (_, res) => res.json({ ok: true, status: 'running' }));
 
-        ws.send(JSON.stringify({ 
-          type: 'AUTH_OK', 
-          worker: { id: user.id, name: user.name || 'Worker' } 
-        }));
+// WebSocket desactivado temporalmente para diagnosticar
+// const wss = new WebSocket.Server({ server, path: '/ws' });
 
-        console.log(`[WS] 🎉 WORKER #${wid} AUTENTICADO CORRECTAMENTE`);
-      } catch (e) {
-        console.error(`[WS] ❌ Error durante AUTH: ${e.message}`);
-        ws.send(JSON.stringify({ type: 'ERROR', error: e.message }));
-        setTimeout(() => ws.close(4001, e.message), 100);
-      }
-    } 
-    else if (msg.type === 'TASK_SOLVED' && wid) {
-      console.log(`[WS] Solución recibida para tarea ${msg.taskId}`);
-      queue.submitSolution(wid, msg.taskId, msg.token);
-    } 
-    else if (msg.type === 'PING') {
-      ws.send(JSON.stringify({ type: 'PONG' }));
-    }
-  });
-
-  ws.on('close', (code, reason) => {
-    console.log(`[WS] 🔌 Conexión cerrada - Código: ${code}, Razón: ${reason || 'sin razón'}`);
-    if (wid) queue.unregisterWorker(wid);
-  });
-
-  ws.on('error', (err) => {
-    console.error(`[WS] ❌ Error en socket:`, err.message || err);
-  });
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 HumanPass MINIMAL corriendo en http://0.0.0.0:${PORT}`);
+  console.log(`   Health: /health`);
 });
