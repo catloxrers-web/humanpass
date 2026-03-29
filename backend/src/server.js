@@ -13,15 +13,24 @@ const queue     = require('./services/queue');
 const app    = express();
 const server = http.createServer(app);
 const wss    = new WebSocket.Server({ server, path: '/ws' });
+
 const PORT   = process.env.PORT || 3000;
 
+// Middlewares
 app.use(require('cors')({ origin: '*' }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../public')));
 
+// Rutas
 app.use('/auth', require('./routes/auth'));
 app.use('/api',  require('./routes/api'));
-app.get('/health', (_, res) => res.json({ ok: true, ts: Date.now() }));
+
+// Health check (muy útil para Railway)
+app.get('/health', (_, res) => res.json({ 
+  ok: true, 
+  ts: Date.now(),
+  env: process.env.NODE_ENV || 'development'
+}));
 
 // ── Auto-seed: crear usuarios maestros si no existen ─────────────
 async function autoSeed() {
@@ -31,7 +40,7 @@ async function autoSeed() {
       const wHash = await bcrypt.hash('worker123', 10);
       db.prepare(`INSERT INTO users (email, name, password_hash, role, verified, verify_token) VALUES (?,?,?,'worker',1,NULL)`)
         .run('worker@humanpass.test', 'Worker Master', wHash);
-      console.log('[Seed] Worker creado: worker@humanpass.test / worker123');
+      console.log('[Seed] ✅ Worker creado: worker@humanpass.test / worker123');
     }
 
     const clientExists = db.prepare('SELECT id FROM users WHERE email=?').get('admin@humanpass.test');
@@ -39,13 +48,16 @@ async function autoSeed() {
       const cHash = await bcrypt.hash('admin123', 10);
       const r = db.prepare(`INSERT INTO users (email, name, password_hash, role, verified, verify_token) VALUES (?,?,?,'client',1,NULL)`)
         .run('admin@humanpass.test', 'Admin Master', cHash);
+      
       const apiKey = 'hp_' + uuid().replace(/-/g, '');
       db.prepare('INSERT INTO api_keys (user_id, key, label) VALUES (?,?,?)').run(r.lastInsertRowid, apiKey, 'Master Key');
-      console.log('[Seed] Cliente creado: admin@humanpass.test / admin123');
+      
+      console.log('[Seed] ✅ Cliente creado: admin@humanpass.test / admin123');
       console.log('[Seed] API Key:', apiKey);
     }
   } catch(e) {
-    console.error('[Seed] Error:', e.message);
+    console.error('[Seed] ❌ Error:', e.message);
+    // No salimos del proceso, solo logueamos
   }
 }
 
@@ -54,15 +66,18 @@ wss.on('connection', ws => {
   let wid = null;
 
   ws.on('message', raw => {
-    let msg; try { msg = JSON.parse(raw.toString()); } catch { return; }
+    let msg;
+    try { msg = JSON.parse(raw.toString()); } catch { return; }
 
     switch (msg.type) {
-      case 'AUTH': {
+      case 'AUTH':
         try {
           const p = jwt.verify(msg.token, process.env.JWT_SECRET || 'humanpass_secret_cambia_esto_en_produccion');
           if (p.role !== 'worker') throw new Error('Not a worker');
+          
           const u = db.prepare(`SELECT * FROM users WHERE id=? AND active=1`).get(p.userId);
           if (!u || u.role !== 'worker') throw new Error('User not found');
+          
           wid = u.id;
           queue.registerWorker(wid, ws);
           ws.send(JSON.stringify({ type: 'AUTH_OK', worker: { id: u.id, name: u.name, solved: u.solved } }));
@@ -71,21 +86,24 @@ wss.on('connection', ws => {
           ws.close();
         }
         break;
-      }
-      case 'TASK_SOLVED': {
+
+      case 'TASK_SOLVED':
         if (!wid) return;
         const ok = queue.submitSolution(wid, msg.taskId, msg.token);
         ws.send(JSON.stringify({ type: ok ? 'TASK_ACK' : 'TASK_ERROR', taskId: msg.taskId }));
         break;
-      }
-      case 'TASK_SKIP': {
+
+      case 'TASK_SKIP':
         if (!wid) return;
         db.prepare(`UPDATE tasks SET status='pending', worker_id=NULL, assigned_at=NULL WHERE id=? AND worker_id=?`).run(msg.taskId, wid);
         const w = queue.workers.get(wid);
-        if (w) { w.status = 'idle'; w.currentTaskId = null; }
+        if (w) { 
+          w.status = 'idle'; 
+          w.currentTaskId = null; 
+        }
         setTimeout(() => queue.assignPending(), 300);
         break;
-      }
+
       case 'PING':
         ws.send(JSON.stringify({ type: 'PONG' }));
         break;
@@ -96,15 +114,26 @@ wss.on('connection', ws => {
   ws.on('error', e => console.error('[WS]', e.message));
 });
 
-// Limpiar expiradas cada 5 min
+// Limpiar tareas expiradas
 setInterval(() => {
   const r = db.prepare(`UPDATE tasks SET status='expired' WHERE status IN ('pending','assigned') AND expires_at < datetime('now')`).run();
   if (r.changes) console.log(`[Cleanup] ${r.changes} tareas expiradas`);
 }, 300_000);
 
-// Arrancar servidor
-autoSeed().then(() => {
-  server.listen(PORT, () => {
-    console.log(`HumanPass corriendo en puerto ${PORT}`);
-  });
-});
+// ── Iniciar servidor de forma más segura ───────────────────────
+async function startServer() {
+  try {
+    await autoSeed();
+    
+    server.listen(PORT, '0.0.0.0', () => {
+      console.log(`🚀 HumanPass corriendo en http://0.0.0.0:${PORT}`);
+      console.log(`   Health check → /health`);
+      console.log(`   WebSocket    → /ws`);
+    });
+  } catch (err) {
+    console.error('❌ Error fatal al iniciar el servidor:', err.message);
+    process.exit(1);
+  }
+}
+
+startServer();
