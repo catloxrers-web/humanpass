@@ -5,6 +5,8 @@ const http      = require('http');
 const WebSocket = require('ws');
 const path      = require('path');
 const jwt       = require('jsonwebtoken');
+const bcrypt    = require('bcryptjs');
+const { v4: uuid } = require('uuid');
 const db        = require('./models/db');
 const queue     = require('./services/queue');
 
@@ -21,6 +23,32 @@ app.use('/auth', require('./routes/auth'));
 app.use('/api',  require('./routes/api'));
 app.get('/health', (_, res) => res.json({ ok: true, ts: Date.now() }));
 
+// ── Auto-seed: crear usuarios maestros si no existen ─────────────
+async function autoSeed() {
+  try {
+    const workerExists = db.prepare('SELECT id FROM users WHERE email=?').get('worker@humanpass.test');
+    if (!workerExists) {
+      const wHash = await bcrypt.hash('worker123', 10);
+      db.prepare(`INSERT INTO users (email, name, password_hash, role, verified, verify_token) VALUES (?,?,?,'worker',1,NULL)`)
+        .run('worker@humanpass.test', 'Worker Master', wHash);
+      console.log('[Seed] Worker creado: worker@humanpass.test / worker123');
+    }
+
+    const clientExists = db.prepare('SELECT id FROM users WHERE email=?').get('admin@humanpass.test');
+    if (!clientExists) {
+      const cHash = await bcrypt.hash('admin123', 10);
+      const r = db.prepare(`INSERT INTO users (email, name, password_hash, role, verified, verify_token) VALUES (?,?,?,'client',1,NULL)`)
+        .run('admin@humanpass.test', 'Admin Master', cHash);
+      const apiKey = 'hp_' + uuid().replace(/-/g, '');
+      db.prepare('INSERT INTO api_keys (user_id, key, label) VALUES (?,?,?)').run(r.lastInsertRowid, apiKey, 'Master Key');
+      console.log('[Seed] Cliente creado: admin@humanpass.test / admin123');
+      console.log('[Seed] API Key:', apiKey);
+    }
+  } catch(e) {
+    console.error('[Seed] Error:', e.message);
+  }
+}
+
 // ── WebSocket: workers ────────────────────────────────────────────
 wss.on('connection', ws => {
   let wid = null;
@@ -33,8 +61,8 @@ wss.on('connection', ws => {
         try {
           const p = jwt.verify(msg.token, process.env.JWT_SECRET);
           if (p.role !== 'worker') throw new Error('Not a worker');
-          const u = db.prepare(`SELECT * FROM users WHERE id=? AND active=1 AND role='worker'`).get(p.userId);
-          if (!u) throw new Error('User not found');
+          const u = db.prepare(`SELECT * FROM users WHERE id=? AND active=1`).get(p.userId);
+          if (!u || u.role !== 'worker') throw new Error('User not found');
           wid = u.id;
           queue.registerWorker(wid, ws);
           ws.send(JSON.stringify({ type: 'AUTH_OK', worker: { id: u.id, name: u.name, solved: u.solved } }));
@@ -74,14 +102,9 @@ setInterval(() => {
   if (r.changes) console.log(`[Cleanup] ${r.changes} tareas expiradas`);
 }, 300_000);
 
-server.listen(PORT, () => {
-  console.log(`
-╔══════════════════════════════════════╗
-║  HumanPass Simple — Modo Pruebas     ║
-║  http://localhost:${PORT}               ║
-║  WebSocket: ws://localhost:${PORT}/ws   ║
-╚══════════════════════════════════════╝
-
-  Ejecuta primero: npm run seed
-  `);
+// Arrancar servidor
+autoSeed().then(() => {
+  server.listen(PORT, () => {
+    console.log(`HumanPass corriendo en puerto ${PORT}`);
+  });
 });
