@@ -31,20 +31,18 @@ app.get('/health', (_, res) => res.json({ ok: true, ts: Date.now() }));
 // ── Auto-seed ─────────────────────────────────────────────────────
 async function autoSeed() {
   try {
-    // Crear worker si no existe
     if (!db.prepare('SELECT id FROM users WHERE email=?').get('worker@humanpass.test')) {
       const hash = await bcrypt.hash('worker123', 10);
       db.prepare(`INSERT INTO users (email, name, password_hash, role, active) 
                   VALUES (?,?,?,'worker',1)`).run('worker@humanpass.test', 'Worker Master', hash);
-      console.log('[Seed] ✅ Worker creado: worker@humanpass.test');
+      console.log('[Seed] ✅ Worker creado');
     }
 
-    // Crear admin si no existe
     if (!db.prepare('SELECT id FROM users WHERE email=?').get('admin@humanpass.test')) {
       const hash = await bcrypt.hash('admin123', 10);
       db.prepare(`INSERT INTO users (email, name, password_hash, role, active) 
                   VALUES (?,?,?,'client',1)`).run('admin@humanpass.test', 'Admin Master', hash);
-      console.log('[Seed] ✅ Admin creado: admin@humanpass.test');
+      console.log('[Seed] ✅ Admin creado');
     }
   } catch (e) {
     console.error('[Seed] Error:', e.message);
@@ -70,17 +68,24 @@ wss.on('connection', (ws) => {
     }
 
     if (msg.type === 'AUTH') {
+      console.log('[WS] Procesando AUTH...');
       try {
         const secret = process.env.JWT_SECRET || 'humanpass_secret_cambia_esto_en_produccion';
         const payload = jwt.verify(msg.token, secret);
-        console.log(`[WS] JWT verificado → userId: ${payload.userId}, role: ${payload.role}`);
+        console.log(`[WS] ✅ JWT verificado - userId: ${payload.userId}, role: ${payload.role}`);
 
         if (payload.role !== 'worker') {
-          throw new Error('El usuario no es un worker');
+          throw new Error('El usuario no tiene rol de worker');
         }
 
-        const user = db.prepare('SELECT id, name, role FROM users WHERE id=? AND active=1').get(payload.userId);
-        if (!user) throw new Error('Worker no encontrado o inactivo');
+        console.log('[WS] Buscando usuario en DB...');
+        const user = db.prepare('SELECT id, name, role, active FROM users WHERE id=? AND active=1').get(payload.userId);
+
+        if (!user) {
+          throw new Error(`Worker ID ${payload.userId} no encontrado o inactivo`);
+        }
+
+        console.log(`[WS] Usuario encontrado: ${user.name} (ID: ${user.id})`);
 
         wid = user.id;
         queue.registerWorker(wid, ws);
@@ -90,17 +95,16 @@ wss.on('connection', (ws) => {
           worker: { id: user.id, name: user.name } 
         }));
 
-        console.log(`[WS] 🎉 Worker #${wid} autenticado correctamente`);
+        console.log(`[WS] 🎉 WORKER #${wid} AUTENTICADO CORRECTAMENTE`);
       } catch (e) {
-        console.error(`[WS] ❌ Error en AUTH: ${e.message}`);
+        console.error(`[WS] ❌ ERROR EN AUTH: ${e.message}`);
         ws.send(JSON.stringify({ type: 'ERROR', error: e.message }));
         ws.close(4001, e.message);
       }
     } 
     else if (msg.type === 'TASK_SOLVED' && wid) {
       console.log(`[WS] Solución recibida para tarea ${msg.taskId}`);
-      const ok = queue.submitSolution(wid, msg.taskId, msg.token);
-      ws.send(JSON.stringify({ type: ok ? 'TASK_ACK' : 'TASK_ERROR', taskId: msg.taskId }));
+      queue.submitSolution(wid, msg.taskId, msg.token);
     } 
     else if (msg.type === 'PING') {
       ws.send(JSON.stringify({ type: 'PONG' }));
@@ -113,7 +117,7 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('error', (err) => {
-    console.error(`[WS] ❌ Error en WebSocket:`, err.message || err);
+    console.error(`[WS] Error en WebSocket:`, err.message || err);
   });
 });
 
